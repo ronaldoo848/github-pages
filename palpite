@@ -1,0 +1,61 @@
+from flask import Flask, request, jsonify
+import requests
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app)
+
+API_KEY = "SUA_API_KEY_AQUI"  # Substitua pela sua chave da API-Football
+
+HEADERS = {
+    "X-RapidAPI-Key": API_KEY,
+    "X-RapidAPI-Host": "v3.football.api-sports.io"
+}
+
+@app.route("/palpite", methods=["POST"])
+def gerar_palpite():
+    data = request.json
+    jogo = data.get("jogo", "")
+
+    if "x" not in jogo:
+        return jsonify({"palpite": "Formato inválido. Use: Time A x Time B"})
+
+    time1, time2 = map(str.strip, jogo.split("x"))
+
+    url = "https://v3.football.api-sports.io/fixtures/headtohead"
+    params = {"h2h": f"{time1}-{time2}"}
+    response = requests.get(url, headers=HEADERS, params=params)
+
+    if response.status_code != 200:
+        return jsonify({"palpite": "Erro ao consultar dados da API."})
+
+    dados = response.json()
+    jogos = dados.get("response", [])
+
+    if not jogos:
+        return jsonify({"palpite": "Nenhum confronto encontrado."})
+
+    v1, v2, empates = 0, 0, 0
+
+    for jogo in jogos:
+        t_home = jogo["teams"]["home"]
+        t_away = jogo["teams"]["away"]
+
+        if t_home["name"].lower() == time1.lower() and t_home["winner"]:
+            v1 += 1
+        elif t_away["name"].lower() == time2.lower() and t_away["winner"]:
+            v2 += 1
+        else:
+            empates += 1
+
+    if v1 > v2:
+        palpite = f"{time1} tem vantagem histórica. Palpite: Vitória do {time1}"
+    elif v2 > v1:
+        palpite = f"{time2} tem vantagem histórica. Palpite: Vitória do {time2}"
+    else:
+        palpite = "Histórico equilibrado. Palpite: Empate ou Ambos Marcam"
+
+    return jsonify({"palpite": palpite})
+
+if __name__ == "__main__":
+    app.run(debug=True)
